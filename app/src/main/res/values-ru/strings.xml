@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_notes">Мои Заметки</string>
+    <string name="search_hint">Искать заметки</string>
+    <string name="note_title_hint">Заголовок</string>
+    <string name="note_text_hint">Текст заметки</string>
+</resources>

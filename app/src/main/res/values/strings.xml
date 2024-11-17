@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name" translatable="false">Advanced Notes</string>
+
+    <string name="my_notes">My notes</string>
+    <string name="search_hint">Search for notes</string>
+    <string name="note_title_hint">Title</string>
+    <string name="note_text_hint">Note text</string>
+</resources>
