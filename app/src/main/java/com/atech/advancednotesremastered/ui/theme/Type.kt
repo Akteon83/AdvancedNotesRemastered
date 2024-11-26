@@ -52,14 +52,14 @@ val Typography = Typography(
         fontFamily = fontFamily,
         fontWeight = FontWeight.Light,
         fontSize = 16.sp,
-        lineHeight = 12.0.sp,
+        lineHeight = 20.0.sp,
         letterSpacing = 0.0.sp
     ),
     bodyMedium = TextStyle(
         fontFamily = fontFamily,
         fontWeight = FontWeight.Light,
         fontSize = 12.sp,
-        lineHeight = 16.0.sp,
+        lineHeight = 14.0.sp,
         letterSpacing = 0.0.sp
     )
 )

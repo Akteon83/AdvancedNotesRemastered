@@ -1,10 +1,12 @@
 package com.atech.advancednotesremastered
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,10 +49,52 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
+import androidx.room.Room
 import com.atech.advancednotesremastered.data.Note
+import com.atech.advancednotesremastered.data.NoteDatabase
+import com.atech.advancednotesremastered.data.NoteEntity
 import com.atech.advancednotesremastered.ui.theme.AdvancedNotesRemasteredTheme
+import com.atech.advancednotesremastered.viewmodel.EditorScreenViewModel
+import com.atech.advancednotesremastered.viewmodel.MainScreenViewModel
+import kotlinx.serialization.Serializable
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 class MainActivity : ComponentActivity() {
+
+    private val db by lazy {
+        Room.databaseBuilder(
+            applicationContext,
+            NoteDatabase::class.java,
+            "notes.db"
+        ).build()
+    }
+
+    private val mainScreenViewModel by viewModels<MainScreenViewModel> {
+        object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return MainScreenViewModel(db.dao) as T
+            }
+        }
+    }
+
+    private val editorScreenViewModel by viewModels<EditorScreenViewModel> {
+        object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return EditorScreenViewModel(db.dao) as T
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         installSplashScreen()
@@ -57,23 +102,38 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(0, 0)
         )
         setContent {
-            MainScreen()
+            val navController = rememberNavController()
+            NavHost(
+                navController = navController,
+                startDestination = MainScreen
+            ) {
+                composable<MainScreen> {
+                    MainScreen(navController, mainScreenViewModel)
+                }
+                composable<EditorScreen> {
+                    EditorScreen(
+                        navController,
+                        editorScreenViewModel,
+                        it.toRoute<EditorScreen>().noteId
+                    )
+                }
+            }
         }
     }
 }
 
-@Preview
+//@Preview
 @Composable
-fun MainScreen() {
+fun MainScreen(navController: NavController, viewModel: MainScreenViewModel = viewModel()) {
+    val noteEntities = viewModel.notes.collectAsState().value
     AdvancedNotesRemasteredTheme {
-        var notes by remember { mutableStateOf(listOf<Note>()) }
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             contentColor = MaterialTheme.colorScheme.primary,
             floatingActionButton = {
                 FloatingActionButton(
                     onClick = {
-                        notes += Note("Another note", "Yo, I love it!", Color.Red)
+                        navController.navigate(EditorScreen())
                     },
                     modifier = Modifier.size(64.dp),
                     shape = RoundedCornerShape(32.dp),
@@ -99,7 +159,9 @@ fun MainScreen() {
                 ) {
                     Text(
                         text = stringResource(R.string.my_notes),
-                        modifier = Modifier.padding(start = 8.dp).weight(1F),
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .weight(1F),
                         style = MaterialTheme.typography.headlineMedium
                     )
                     Icon(
@@ -114,8 +176,12 @@ fun MainScreen() {
                     verticalItemSpacing = 16.dp,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(notes) { note ->
-                        NoteCard(note)
+                    items(noteEntities) { noteEntity ->
+                        NoteCard(
+                            noteEntity = noteEntity,
+                            onClick = { navController.navigate(EditorScreen(noteEntity.id)) },
+                            onFavouriteClick = { viewModel.switchFavourite(noteEntity) }
+                        )
                     }
                 }
             }
@@ -123,11 +189,15 @@ fun MainScreen() {
     }
 }
 
-@Preview
+//@Preview
+@SuppressLint("RememberReturnType")
 @Composable
-fun NoteEditorScreen() {
-    var title by remember { mutableStateOf("") }
-    var text by remember { mutableStateOf("") }
+fun EditorScreen(
+    navController: NavController,
+    viewModel: EditorScreenViewModel = viewModel(),
+    noteId: Int?
+) {
+    remember { viewModel.setContent(noteId) }
     AdvancedNotesRemasteredTheme {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -146,12 +216,21 @@ fun NoteEditorScreen() {
                     Icon(
                         painter = painterResource(R.drawable.back_icon),
                         contentDescription = null,
+                        modifier = Modifier.clickable {
+                            navController.navigateUp()
+                        }
                     )
-                    Icon(
-                        painter = painterResource(R.drawable.check),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    if (viewModel.title.isNotEmpty() || viewModel.text.isNotEmpty()) {
+                        Icon(
+                            painter = painterResource(R.drawable.check),
+                            contentDescription = null,
+                            modifier = Modifier.clickable {
+                                viewModel.upsert()
+                                navController.navigateUp()
+                            },
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
                 Column(
                     modifier = Modifier
@@ -169,16 +248,19 @@ fun NoteEditorScreen() {
                                 .padding(8.dp)
                                 .size(24.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color.Blue)
+                                .background(viewModel.color)
                         )
                         BasicTextField(
-                            value = title,
-                            onValueChange = { title = it },
+                            value = viewModel.title,
+                            onValueChange = {
+                                viewModel.title =
+                                    if (it.length <= 20) it else it.substring(0, 20)
+                            },
                             modifier = Modifier.padding(start = 4.dp),
                             textStyle = MaterialTheme.typography.titleLarge,
                             singleLine = true,
                             decorationBox = { innerTextField ->
-                                if (title.isEmpty()) {
+                                if (viewModel.title.isEmpty()) {
                                     Text(
                                         text = stringResource(R.string.note_title_hint),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -190,12 +272,14 @@ fun NoteEditorScreen() {
                         )
                     }
                     BasicTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        value = viewModel.text,
+                        onValueChange = { viewModel.text = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
                         textStyle = MaterialTheme.typography.bodyLarge,
                         decorationBox = { innerTextField ->
-                            if (text.isEmpty()) {
+                            if (viewModel.text.isEmpty()) {
                                 Text(
                                     text = stringResource(R.string.note_text_hint),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -208,19 +292,37 @@ fun NoteEditorScreen() {
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.color_icon),
-                        contentDescription = null,
+                        contentDescription = null
                     )
                     Icon(
                         painter = painterResource(R.drawable.image_icon),
-                        contentDescription = null,
+                        contentDescription = null
                     )
                     Icon(
                         painter = painterResource(R.drawable.delete_icon),
                         contentDescription = null,
+                        modifier = Modifier.clickable {
+                            viewModel.delete()
+                            navController.navigateUp()
+                        },
+                        tint = Color(192, 64, 64, 255)
+
+                    )
+                    Icon(
+                        painter = painterResource(if (viewModel.isFavourite) R.drawable.favourite_filled_icon else R.drawable.favourite_icon),
+                        contentDescription = null,
+                        modifier = Modifier.clickable {
+                            viewModel.isFavourite = !viewModel.isFavourite
+                        },
+                        tint = if (viewModel.isFavourite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Icon(
+                        painter = painterResource(R.drawable.share_icon),
+                        contentDescription = null
                     )
                 }
             }
@@ -260,8 +362,10 @@ fun SearchBarPlaceholder(modifier: Modifier) {
 }
 
 @Composable
-fun NoteCard(note: Note) {
+fun NoteCard(noteEntity: NoteEntity, onClick: () -> Unit, onFavouriteClick: () -> Unit) {
+    val note = Note(noteEntity)
     Card(
+        modifier = Modifier.clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -271,10 +375,10 @@ fun NoteCard(note: Note) {
         )
     ) {
         Column {
-            Image(
-                painter = painterResource(R.drawable.navy),
-                contentDescription = null
-            )
+//            Image(
+//                painter = painterResource(R.drawable.navy),
+//                contentDescription = null
+//            )
             Column(modifier = Modifier.padding(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -287,7 +391,9 @@ fun NoteCard(note: Note) {
                         style = MaterialTheme.typography.titleMedium
                     )
                     Icon(
-                        modifier = Modifier.align(Alignment.Top).clickable { note.isFavourite = !note.isFavourite },
+                        modifier = Modifier
+                            .align(Alignment.Top)
+                            .clickable { onFavouriteClick() },
                         painter = painterResource(if (note.isFavourite) R.drawable.star_filled_icon else R.drawable.star_icon),
                         contentDescription = null,
                         tint = if (note.isFavourite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -306,7 +412,7 @@ fun NoteCard(note: Note) {
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "вчера",
+                    text = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).format(note.date),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -314,3 +420,28 @@ fun NoteCard(note: Note) {
         }
     }
 }
+
+@Preview
+@Composable
+fun NoteCardPreview() {
+    AdvancedNotesRemasteredTheme {
+        Box(Modifier.size(256.dp)) {
+            NoteCard(
+                noteEntity = Note(
+                    "Amazing trip",
+                    "The trip was very lovely!",
+                    Color.Green,
+                    LocalDateTime.of(2024, 8, 21, 15, 41, 38, 13),
+                ).toEntity(),
+                onClick = {},
+                onFavouriteClick = {}
+            )
+        }
+    }
+}
+
+@Serializable
+object MainScreen
+
+@Serializable
+data class EditorScreen(val noteId: Int? = null)
