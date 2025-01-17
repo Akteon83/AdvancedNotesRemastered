@@ -1,5 +1,6 @@
 package com.atech.advancednotesremastered.viewmodel
 
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -19,10 +20,11 @@ class EditorScreenViewModel(private val dao: NoteDao) : ViewModel() {
 
     var title by mutableStateOf("")
     var text by mutableStateOf("")
-    var color by mutableStateOf(Color.Blue)
+    var color by mutableStateOf(Color.Black)
+    var imageUri by mutableStateOf<Uri>(Uri.EMPTY)
     var isFavourite by mutableStateOf(false)
 
-    fun setContent(id: Int?) {
+    fun loadContent(id: Int?) {
         clearContent()
         viewModelScope.launch {
             noteId = id
@@ -31,6 +33,7 @@ class EditorScreenViewModel(private val dao: NoteDao) : ViewModel() {
                 title = note.title
                 text = note.text
                 color = Color(note.color)
+                imageUri = Uri.parse(note.image)
                 isFavourite = note.isFavourite
             }
         }
@@ -42,14 +45,16 @@ class EditorScreenViewModel(private val dao: NoteDao) : ViewModel() {
         title = ""
         text = ""
         color = Color(rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256), 255)
+        imageUri = Uri.EMPTY
         isFavourite = false
     }
 
-    fun upsert() {
+    fun upsertNote() {
         val note = Note(
             title,
             text,
             color,
+            imageUri,
             LocalDateTime.now(),
             isFavourite
         )
@@ -62,7 +67,7 @@ class EditorScreenViewModel(private val dao: NoteDao) : ViewModel() {
         }
     }
 
-    fun delete() {
+    fun deleteNote() {
         if (noteId != null) {
             viewModelScope.launch {
                 dao.deleteNote(dao.getNote(noteId!!))

@@ -1,13 +1,24 @@
 package com.atech.advancednotesremastered
 
+import android.Manifest
+import android.Manifest.permission.READ_EXTERNAL_STORAGE
+import android.Manifest.permission.READ_MEDIA_IMAGES
+import android.Manifest.permission.READ_MEDIA_VIDEO
+import android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.Indication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
@@ -36,18 +48,18 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -58,6 +70,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import androidx.room.Room
+import coil.compose.AsyncImage
 import com.atech.advancednotesremastered.data.Note
 import com.atech.advancednotesremastered.data.NoteDatabase
 import com.atech.advancednotesremastered.data.NoteEntity
@@ -190,17 +203,24 @@ fun MainScreen(navController: NavController, viewModel: MainScreenViewModel = vi
 }
 
 //@Preview
-@SuppressLint("RememberReturnType")
+@SuppressLint("RememberReturnType", "InlinedApi")
 @Composable
 fun EditorScreen(
     navController: NavController,
     viewModel: EditorScreenViewModel = viewModel(),
     noteId: Int?
 ) {
-    remember { viewModel.setContent(noteId) }
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { }
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri -> viewModel.imageUri = uri ?: Uri.EMPTY }
+    remember { viewModel.loadContent(noteId) }
     AdvancedNotesRemasteredTheme {
         Scaffold(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().imePadding(),
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant
         ) { innerPadding ->
             Column(
@@ -225,7 +245,7 @@ fun EditorScreen(
                             painter = painterResource(R.drawable.check),
                             contentDescription = null,
                             modifier = Modifier.clickable {
-                                viewModel.upsert()
+                                viewModel.upsertNote()
                                 navController.navigateUp()
                             },
                             tint = MaterialTheme.colorScheme.primary
@@ -237,7 +257,7 @@ fun EditorScreen(
                         .fillMaxWidth()
                         .padding(vertical = 16.dp)
                         .weight(1F)
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(rememberScrollState(), reverseScrolling = true)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -271,6 +291,37 @@ fun EditorScreen(
                             }
                         )
                     }
+                    if (viewModel.imageUri != Uri.EMPTY) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            AsyncImage(
+                                model = viewModel.imageUri,
+                                contentDescription = null,
+                                modifier = Modifier.clip(RoundedCornerShape(16.dp)),
+                                contentScale = ContentScale.FillWidth
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(bottomStart = 16.dp))
+                                    .background(MaterialTheme.colorScheme.background)
+                                    .clickable { viewModel.imageUri = Uri.EMPTY }
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.close_icon),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(2.dp),
+                                    tint = Color(192, 64, 64, 255)
+                                )
+                            }
+                        }
+                    }
                     BasicTextField(
                         value = viewModel.text,
                         onValueChange = { viewModel.text = it },
@@ -300,13 +351,40 @@ fun EditorScreen(
                     )
                     Icon(
                         painter = painterResource(R.drawable.image_icon),
-                        contentDescription = null
+                        contentDescription = null,
+                        modifier = Modifier.clickable {
+                            if (ContextCompat.checkSelfPermission(
+                                    context,
+                                    READ_MEDIA_VISUAL_USER_SELECTED
+                                ) == PackageManager.PERMISSION_GRANTED
+                                || ContextCompat.checkSelfPermission(
+                                    context,
+                                    READ_MEDIA_IMAGES
+                                ) == PackageManager.PERMISSION_GRANTED
+                                || ContextCompat.checkSelfPermission(
+                                    context,
+                                    READ_EXTERNAL_STORAGE
+                                ) == PackageManager.PERMISSION_GRANTED
+                            ) {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            } else {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                                    permissionLauncher.launch(arrayOf(READ_MEDIA_IMAGES, READ_MEDIA_VISUAL_USER_SELECTED))
+                                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    permissionLauncher.launch(arrayOf(READ_MEDIA_IMAGES))
+                                } else {
+                                    permissionLauncher.launch(arrayOf(READ_EXTERNAL_STORAGE))
+                                }
+                            }
+                        }
                     )
                     Icon(
                         painter = painterResource(R.drawable.delete_icon),
                         contentDescription = null,
                         modifier = Modifier.clickable {
-                            viewModel.delete()
+                            viewModel.deleteNote()
                             navController.navigateUp()
                         },
                         tint = Color(192, 64, 64, 255)
@@ -375,10 +453,10 @@ fun NoteCard(noteEntity: NoteEntity, onClick: () -> Unit, onFavouriteClick: () -
         )
     ) {
         Column {
-//            Image(
-//                painter = painterResource(R.drawable.navy),
-//                contentDescription = null
-//            )
+            AsyncImage(
+                model = note.image,
+                contentDescription = null
+            )
             Column(modifier = Modifier.padding(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -406,11 +484,13 @@ fun NoteCard(noteEntity: NoteEntity, onClick: () -> Unit, onFavouriteClick: () -
                         .height(4.dp)
                         .background(note.color)
                 )
-                Text(
-                    text = note.text,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                if (note.image == Uri.EMPTY) {
+                    Text(
+                        text = note.text,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
                 Text(
                     text = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).format(note.date),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -431,6 +511,7 @@ fun NoteCardPreview() {
                     "Amazing trip",
                     "The trip was very lovely!",
                     Color.Green,
+                    Uri.EMPTY,
                     LocalDateTime.of(2024, 8, 21, 15, 41, 38, 13),
                 ).toEntity(),
                 onClick = {},

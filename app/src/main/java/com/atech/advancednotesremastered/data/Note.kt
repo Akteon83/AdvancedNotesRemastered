@@ -1,5 +1,6 @@
 package com.atech.advancednotesremastered.data
 
+import android.net.Uri
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import java.time.LocalDateTime
@@ -9,6 +10,7 @@ class Note(
     title: String,
     var text: String,
     var color: Color,
+    var image: Uri,
     var date: LocalDateTime,
     var isFavourite: Boolean = false
 ) {
@@ -25,6 +27,7 @@ class Note(
         noteEntity.title,
         noteEntity.text,
         Color(noteEntity.color),
+        Uri.parse(noteEntity.image),
         LocalDateTime.ofEpochSecond(noteEntity.date, 0, ZoneOffset.UTC),
         noteEntity.isFavourite
     )
@@ -43,6 +46,7 @@ class Note(
             title,
             text,
             color.toArgb(),
+            image.toString(),
             date.toEpochSecond(ZoneOffset.UTC),
             isFavourite
         )
@@ -53,6 +57,7 @@ class Note(
             title,
             text,
             color.toArgb(),
+            image.toString(),
             date.toEpochSecond(ZoneOffset.UTC),
             isFavourite,
             id

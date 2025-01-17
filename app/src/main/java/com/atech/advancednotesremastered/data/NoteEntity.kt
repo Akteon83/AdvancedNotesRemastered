@@ -9,6 +9,7 @@ data class NoteEntity(
     var title: String,
     var text: String,
     var color: Int,
+    var image: String,
     var date: Long,
     var isFavourite: Boolean,
 
