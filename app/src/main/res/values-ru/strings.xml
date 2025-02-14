@@ -4,4 +4,11 @@
     <string name="search_hint">Искать заметки</string>
     <string name="note_title_hint">Заголовок</string>
     <string name="note_text_hint">Текст заметки</string>
+
+    <string name="note_delete_dialog">Удалить заметку?</string>
+    <string name="note_quit_dialog">Сохранить изменения?</string>
+    <string name="cancel">ОТМЕНА</string>
+    <string name="delete">УДАЛИТЬ</string>
+    <string name="save">СОХРАНИТЬ</string>
+    <string name="dont_save">НЕ СОХРАНЯТЬ</string>
 </resources>

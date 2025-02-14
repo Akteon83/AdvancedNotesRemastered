@@ -25,6 +25,9 @@ interface NoteDao {
     @Query("UPDATE notes SET isFavourite = :isFavourite WHERE id = :id")
     suspend fun updateFavourite(isFavourite: Boolean, id: Int)
 
+    @Query("SELECT * FROM notes WHERE title LIKE '%' || :search || '%' ORDER BY date DESC")
+    fun searchNotes(search: String): Flow<List<NoteEntity>>
+
     @Transaction
     suspend fun switchFavourite(note: NoteEntity) {
         updateFavourite(!note.isFavourite, note.id)

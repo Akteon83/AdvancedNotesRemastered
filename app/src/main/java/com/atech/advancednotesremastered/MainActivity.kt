@@ -1,9 +1,7 @@
 package com.atech.advancednotesremastered
 
-import android.Manifest
 import android.Manifest.permission.READ_EXTERNAL_STORAGE
 import android.Manifest.permission.READ_MEDIA_IMAGES
-import android.Manifest.permission.READ_MEDIA_VIDEO
 import android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
@@ -18,7 +16,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.Indication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +35,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardColors
 import androidx.compose.material3.FloatingActionButton
@@ -46,9 +44,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -182,7 +185,10 @@ fun MainScreen(navController: NavController, viewModel: MainScreenViewModel = vi
                         contentDescription = null
                     )
                 }
-                SearchBarPlaceholder(Modifier.padding(vertical = 16.dp))
+                SearchBar(
+                    modifier = Modifier.padding(vertical = 16.dp),
+                    viewModel = viewModel
+                )
                 LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Fixed(2),
                     modifier = Modifier.fillMaxSize(),
@@ -217,6 +223,9 @@ fun EditorScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri -> viewModel.imageUri = uri ?: Uri.EMPTY }
+
+    val openedAlertDialog = remember { mutableIntStateOf(0) }
+
     remember { viewModel.loadContent(noteId) }
     AdvancedNotesRemasteredTheme {
         Scaffold(
@@ -237,7 +246,7 @@ fun EditorScreen(
                         painter = painterResource(R.drawable.back_icon),
                         contentDescription = null,
                         modifier = Modifier.clickable {
-                            navController.navigateUp()
+                            openedAlertDialog.intValue = 2
                         }
                     )
                     if (viewModel.title.isNotEmpty() || viewModel.text.isNotEmpty()) {
@@ -384,8 +393,7 @@ fun EditorScreen(
                         painter = painterResource(R.drawable.delete_icon),
                         contentDescription = null,
                         modifier = Modifier.clickable {
-                            viewModel.deleteNote()
-                            navController.navigateUp()
+                            openedAlertDialog.intValue = 1
                         },
                         tint = Color(192, 64, 64, 255)
 
@@ -405,11 +413,35 @@ fun EditorScreen(
                 }
             }
         }
+        when(openedAlertDialog.intValue) {
+            1 -> AdvancedAlertDialog(
+                title = stringResource(R.string.note_delete_dialog),
+                confirmText = stringResource(R.string.delete),
+                dismissText = stringResource(R.string.cancel),
+                onDismissRequest = { openedAlertDialog.intValue = 0 },
+                onConfirm = {
+                    viewModel.deleteNote()
+                    navController.navigateUp()
+                },
+                onDismiss = { openedAlertDialog.intValue = 0 }
+            )
+            2 -> AdvancedAlertDialog(
+                title = stringResource(R.string.note_quit_dialog),
+                confirmText = stringResource(R.string.save),
+                dismissText = stringResource(R.string.dont_save),
+                onDismissRequest = { openedAlertDialog.intValue = 0 },
+                onConfirm = {
+                    viewModel.upsertNote()
+                    navController.navigateUp()
+                },
+                onDismiss = { navController.navigateUp() }
+            )
+        }
     }
 }
 
 @Composable
-fun SearchBarPlaceholder(modifier: Modifier) {
+fun SearchBar(modifier: Modifier, viewModel: MainScreenViewModel) {
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -431,9 +463,25 @@ fun SearchBarPlaceholder(modifier: Modifier) {
                 contentDescription = null,
                 modifier = Modifier.padding(8.dp)
             )
-            Text(
-                text = stringResource(R.string.search_hint),
-                style = MaterialTheme.typography.titleMedium
+//            Text(
+//                text = stringResource(R.string.search_hint),
+//                style = MaterialTheme.typography.titleMedium
+//            )
+            BasicTextField(
+                value = viewModel.search,
+                onValueChange = { viewModel.search = it },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.titleMedium,
+                decorationBox = { innerTextField ->
+                    if (viewModel.search.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.search_hint),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                    innerTextField()
+                }
             )
         }
     }
@@ -499,6 +547,49 @@ fun NoteCard(noteEntity: NoteEntity, onClick: () -> Unit, onFavouriteClick: () -
             }
         }
     }
+}
+
+@Composable
+fun AdvancedAlertDialog(
+    title: String,
+    confirmText: String,
+    dismissText: String,
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { onDismissRequest() },
+        title = {
+            Text(
+                text = title,
+//                color = MaterialTheme.colorScheme.onSurface,
+//                style = MaterialTheme.typography.titleMedium
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm
+            ) {
+                Text(
+                    text = confirmText,
+//                    color = MaterialTheme.colorScheme.onSurface,
+//                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss
+            ) {
+                Text(
+                    text = dismissText,
+//                    color = MaterialTheme.colorScheme.onSurface,
+//                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    )
 }
 
 @Preview

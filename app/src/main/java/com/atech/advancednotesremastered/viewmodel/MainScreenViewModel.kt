@@ -1,5 +1,8 @@
 package com.atech.advancednotesremastered.viewmodel
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.atech.advancednotesremastered.data.NoteDao
@@ -10,7 +13,8 @@ import kotlinx.coroutines.launch
 
 class MainScreenViewModel(private val dao: NoteDao) : ViewModel() {
 
-    val notes = dao.getNotesOrdered().stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
+    var search by mutableStateOf("")
+    val notes = dao.searchNotes(search).stateIn(viewModelScope, SharingStarted.WhileSubscribed(), emptyList())
 
     fun switchFavourite(note: NoteEntity) {
         viewModelScope.launch {
